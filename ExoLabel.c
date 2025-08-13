@@ -1402,9 +1402,9 @@ void cluster_file(const char* weights_fname,
       atten_param = (float)GLOBAL_verts_changed / num_v;
       if(atten_pow == 0){
         atten_param = 0;
-      } else if (atten_pow != 1){
-        atten_param = pow(atten_param, atten_pow);
-      }
+      } // else if (atten_pow != 1){
+        // atten_param = pow(atten_param, atten_pow);
+        // }
       iteration_length = GLOBAL_queue->length;
       GLOBAL_verts_changed = 0;
     }
