@@ -1572,7 +1572,9 @@ static void validate_edgefile_is_sorted(const char* neighbor, const l_uint expec
 }
 
 #ifdef COMPILING_SYNEXTEND_VIA_R
-/* Definitions specific to R-installations */
+/******************************/
+/* R-installation Definitions */
+/******************************/
 static SEXP find_disjoint_sets(l_uint num_v, const double cutoff,
                               const char* edges_file, const char* weights_file){
   l_uint* sets = safe_malloc(sizeof(l_uint) * num_v);
@@ -1888,4 +1890,182 @@ SEXP R_LPOOM_cluster(SEXP FILENAME, SEXP NUM_EFILES, // files
   UNPROTECT(1);
   return RETURN_VAL;
 }
+
+#else
+/******************************/
+/* C-installation Definitions */
+/******************************/
+int C_LPOOM_cluster(char** all_edgefiles,
+                    const int num_edgefiles, // files
+                    const char* dir,
+                    const int num_ofiles,
+                    const char** all_outfiles,  // more files
+                    const char* seps,
+                    int* num_iter,
+                    const int verbose,
+                    const int is_undirected,
+                    const double* self_loop_weights, // optional adjustments
+                    const int ignore_weights,
+                    const int use_inplace_sort,
+                    const double* atten_power,
+                    const int skip_header_lines){
+
+  // Assume all input is validated by this point
+  // initialize global variables
+  GLOBAL_nfiles = 0;
+  GLOBAL_filenames = safe_malloc(sizeof(char*) * 10);
+  GLOBAL_ftracker = safe_malloc(sizeof(file_t*) * 20);
+  GLOBAL_trie = initialize_trie();
+  GLOBAL_all_leaves = NULL;
+  GLOBAL_mergebuffers = NULL;
+  GLOBAL_nbuffers = 0;
+  GLOBAL_mergetree = NULL;
+  GLOBAL_readedges = NULL;
+  GLOBAL_cachectr = 0;
+
+  // main files
+  const char* weightsfile = create_filename(dir, "weights.bin");
+  const char* neighborfile = create_filename(dir, "neighbors.bin");
+  const char* outfile;
+  const char* edgefile;
+
+  // required parameters
+  aq_int base_iter = 0;
+  l_uint num_v = 0;
+
+  // timing
+  time_t time1, time2;
+
+  time1 = time(NULL);
+  if(verbose >= VERBOSE_BASIC) Rprintf("Reading in edges...\n");
+  l_uint num_edges = 0;
+  file_t *neighbortable = fopen_tracked(neighborfile, "ab", UNCOMPRESSED);
+  GLOBAL_readedges = safe_malloc(FILE_READ_CACHE_SIZE * sizeof(edge));
+  GLOBAL_cachectr = 0;
+  for(int i=0; i<num_edgefiles; i++){
+    edgefile = all_edgefiles[i]
+    num_edges += csr_compress_edgelist_trie(edgefile, GLOBAL_trie,
+                                              neighbortable,
+                                              seps[0], seps[1],
+                                              &num_v, verbose,
+                                              is_undirected,
+                                              ignore_weights,
+                                              skip_header_lines,
+                                              i == num_edgefiles-1);
+  }
+  fclose_tracked(1);
+  if(verbose >= VERBOSE_BASIC)
+    print_graph_stats(num_v, num_edges);
+
+  // allocate space for leaf counters (one extra space to hold final value of cumulative counts)
+  GLOBAL_all_leaves = safe_malloc(sizeof(leaf *) * (num_v+1));
+
+  // next, reformat the file to get final counts for each node
+  if(verbose >= VERBOSE_BASIC) Rprintf("Tidying up internal tables...\n");
+  l_uint print_val = 0;
+  reindex_trie_and_write_counts(GLOBAL_trie, 0, verbose, &print_val);
+  // final print in reindex_trie_and_write_counts is \r, need a newline
+  if(verbose >= VERBOSE_ALL) Rprintf("\tProcessed %" lu_fprint " vertices\n", print_val);
+
+  l_uint max_degree = 0;
+  // change edge_start values to cumulative counts
+  GLOBAL_all_leaves[num_v] = malloc(sizeof(leaf));
+  GLOBAL_all_leaves[num_v]->count = 0;
+  GLOBAL_all_leaves[num_v]->edge_start = 0;
+  l_uint running_sum = 0;
+  for(l_uint i=0; i<=num_v; i++){
+    leaf* tmp_leaf = GLOBAL_all_leaves[i];
+    if(tmp_leaf->count > max_degree) max_degree = tmp_leaf->count;
+    if(running_sum > num_edges)
+      error("Offsets incorrect: node %" lu_fprint
+            " has offset %" lu_fprint "(only %"
+            lu_fprint " edges total!)\n",
+            i, running_sum, num_edges);
+    tmp_leaf->edge_start = running_sum;
+    running_sum += tmp_leaf->count;
+    // trie clusters are reset later, no need to reset them here
+  }
+  if(verbose >= VERBOSE_ALL)
+    Rprintf("\tMaximum node degree is %" lu_fprint "!\n", max_degree);
+
+  // get base number of iterations
+  max_degree = (l_uint)(sqrt((double)max_degree));
+  size_t num_bits = sizeof(aq_int) * 8 - 1; // signed, so we have one less bit to work with
+  base_iter = ((aq_int)(1)) << num_bits;
+  base_iter = base_iter > max_degree ? max_degree : base_iter;
+  base_iter = base_iter < 5 ? 5 : base_iter; // minimum of 5 iterations per node
+
+  // sort the file and split it into neighbor and weight
+  if(FILE_READ_CACHE_SIZE < num_edges){
+    if(use_inplace_sort){
+      kway_mergesort_file_inplace(neighborfile,
+                                  num_edges, sizeof(edge),
+                                  FILE_READ_CACHE_SIZE,
+                                  MERGE_INPUT_SIZE,
+                                  MAX_BINS_FOR_MERGE, // bins to merge with
+                                  MERGE_OUTPUT_SIZE, // size of output buffer
+                                  fast_edge_compar, verbose);
+    } else {
+      kway_mergesort_file(neighborfile, weightsfile,
+                                  num_edges, sizeof(edge),
+                                  FILE_READ_CACHE_SIZE,
+                                  MERGE_INPUT_SIZE,
+                                  MAX_BINS_FOR_MERGE, // bins to merge with
+                                  MERGE_OUTPUT_SIZE, // size of output buffer
+                                  fast_edge_compar, verbose);
+    }
+  }
+
+  split_sorted_file(neighborfile, weightsfile, num_edges, verbose);
+  time2 = time(NULL);
+
+  if(verbose >= VERBOSE_BASIC) report_time(time1, time2, "\t");
+
+  char vert_name_holder[MAX_NODE_NAME_SIZE];
+  char write_buffer[PATH_MAX];
+  for(int i=0; i<num_ofiles; i++){
+    if(verbose >= VERBOSE_BASIC) Rprintf("Clustering...\n");
+    reset_trie_clusters(num_v);
+    if(num_iter[i] == 0){
+      if(verbose >= VERBOSE_BASIC)
+        Rprintf("\tAutomatically setting iterations to %d (was 0)\n", base_iter);
+      num_iter[i] = base_iter;
+    }
+    time1 = time(NULL);
+    // weights will be compressed and decompressed, but self_loop_weights isn't yet
+    // this could cause issues if there's a loss in precision in weights
+    w_float new_slw;
+    decompressEdgeValue(compressEdgeValues(0,0,self_loop_weights[i]).w, NULL, &new_slw);
+    cluster_file(weightsfile, neighborfile, num_v, num_iter[i], verbose,
+                    new_slw, atten_power[i]);
+    time2 = time(NULL);
+    if(verbose >= VERBOSE_BASIC) report_time(time1, time2, "\t");
+
+    // have to allocate resources for writing out
+    outfile = all_outfiles[i];
+    file_t *results = fopen_tracked(outfile, "wb", UNCOMPRESSED);
+    if(!results) error("Failed to open output file.");
+    l_uint *clust_mapping = safe_calloc(num_v, L_SIZE);
+    CLUST_MAP_CTR = 1;
+    if(verbose == VERBOSE_ALL) Rprintf("Writing clusters to file...\n\tVertices remaining: %" lu_fprint "", num_v);
+    else if(verbose == VERBOSE_BASIC) Rprintf("Writing clusters to file...\n");
+    write_output_clusters_trie(results, GLOBAL_trie, clust_mapping, vert_name_holder,
+                                0, write_buffer, (size_t)PATH_MAX, seps, num_v, verbose);
+    if(verbose == VERBOSE_ALL) Rprintf("\r\tNodes remaining: Done!               \n");
+    else if(verbose == VERBOSE_BASIC) Rprintf("Execution completed!\n");
+    free(clust_mapping);
+    fclose_tracked(1);
+  }
+
+  remove(weightsfile);
+  remove(neighborfile);
+  cleanup_ondisklp_global_values();
+
+  l_uint* return_values = safe_malloc(sizeof(l_uint)*2);
+  return_values[0] = num_v;
+  return_values[1] = num_edges;
+
+  return return_values;
+}
+
 #endif

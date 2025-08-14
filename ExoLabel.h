@@ -1,6 +1,9 @@
 #ifndef EXOLABEL_H
 #define EXOLABEL_H
 
+// function has to be defined prior to FallbackDefines import
+void cleanup_ondisklp_global_values(void);
+
 #ifdef COMPILING_SYNEXTEND_VIA_R
   #include "../SEutils.h"
 #else
@@ -97,12 +100,28 @@ static const int PROGRESS_COUNTER_MOD = 6043;
 /**********************/
 /* Exported functions */
 /**********************/
-void cleanup_ondisklp_global_values();
 
 void cluster_file(const char* weights_fname,
                   const char* neighbor_fname,
                   const l_uint num_v, const int max_iterations, const int v,
                   const float self_loop_weight,
                   const double atten_pow);
+
+#ifndef COMPILING_SYNEXTEND_VIA_R
+int C_LPOOM_cluster(char** all_edgefiles,
+                    const int num_edgefiles, // files
+                    const char* dir,
+                    const int num_ofiles,
+                    const char** all_outfiles,  // more files
+                    const char* seps,
+                    int* num_iter,
+                    const int verbose,
+                    const int is_undirected,
+                    const double* self_loop_weights, // optional adjustments
+                    const int ignore_weights,
+                    const int use_inplace_sort,
+                    const double* atten_power,
+                    const int skip_header_lines);
+#endif
 
 #endif

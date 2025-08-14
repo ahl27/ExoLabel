@@ -35,6 +35,7 @@
       vfprintf(stderr, fmt, args);
       va_end(args);
       fprintf(stderr, "\n");
+      cleanup_ondisklp_values();
       exit(EXIT_FAILURE);
   }
 
@@ -54,7 +55,7 @@
   }
 
   static inline void R_CheckUserInterrupt(void) { return; }
-  static inline void GetRNGstate(void) { srand(time(NULL)); }
+  static inline void GetRNGstate(void) { return; }
   static inline void PutRNGstate(void) { return; }
   static inline double unif_rand(void) { return ((double)rand()) / RAND_MAX; }
 
