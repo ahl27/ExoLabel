@@ -89,6 +89,7 @@ static int fclose_dispatch(file_t *f){
     error("Internal error attempting to call fclose on file with format %d",
       f->file_type);
   }
+  return 0;
 };
 
 static size_t fread_dispatch(void *buf, size_t size, size_t count, file_t *f){

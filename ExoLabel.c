@@ -1895,20 +1895,20 @@ SEXP R_LPOOM_cluster(SEXP FILENAME, SEXP NUM_EFILES, // files
 /******************************/
 /* C-installation Definitions */
 /******************************/
-int C_LPOOM_cluster(char** all_edgefiles,
-                    const int num_edgefiles, // files
-                    const char* dir,
-                    const int num_ofiles,
-                    const char** all_outfiles,  // more files
-                    const char* seps,
-                    int* num_iter,
-                    const int verbose,
-                    const int is_undirected,
-                    const double* self_loop_weights, // optional adjustments
-                    const int ignore_weights,
-                    const int use_inplace_sort,
-                    const double* atten_power,
-                    const int skip_header_lines){
+l_uint* C_LPOOM_cluster(char** all_edgefiles,
+                        const int num_edgefiles, // files
+                        const char* dir,
+                        const int num_ofiles,
+                        const char** all_outfiles,  // more files
+                        const char* seps,
+                        int* num_iter,
+                        const int verbose,
+                        const int is_undirected,
+                        const double* self_loop_weights, // optional adjustments
+                        const int ignore_weights,
+                        const int use_inplace_sort,
+                        const double* atten_power,
+                        const int skip_header_lines){
 
   // Assume all input is validated by this point
   // initialize global variables
@@ -1943,7 +1943,7 @@ int C_LPOOM_cluster(char** all_edgefiles,
   GLOBAL_readedges = safe_malloc(FILE_READ_CACHE_SIZE * sizeof(edge));
   GLOBAL_cachectr = 0;
   for(int i=0; i<num_edgefiles; i++){
-    edgefile = all_edgefiles[i]
+    edgefile = all_edgefiles[i];
     num_edges += csr_compress_edgelist_trie(edgefile, GLOBAL_trie,
                                               neighbortable,
                                               seps[0], seps[1],

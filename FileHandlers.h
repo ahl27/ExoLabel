@@ -2,6 +2,7 @@
 #define FHANDLE_FILE_H
 
 #include <zlib.h>
+#include <string.h>
 
 #ifdef COMPILING_SYNEXTEND_VIA_R
   #include "../SEutils.h" // for safe_malloc

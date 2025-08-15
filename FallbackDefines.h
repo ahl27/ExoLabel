@@ -20,6 +20,9 @@
   #define safe_calloc calloc
   #define safe_realloc realloc
 
+  static inline void *void_deref(void *v, int i, size_t size){
+    return i ? (void *)((char *)v + (i*size)) : v;
+  }
 
   // Standalone fallback for Rprintf
   static inline void Rprintf(const char *fmt, ...) {
@@ -35,7 +38,6 @@
       vfprintf(stderr, fmt, args);
       va_end(args);
       fprintf(stderr, "\n");
-      cleanup_ondisklp_values();
       exit(EXIT_FAILURE);
   }
 
