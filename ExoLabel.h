@@ -107,7 +107,7 @@ void cluster_file(const char* weights_fname,
                   const double atten_pow);
 
 #ifndef COMPILING_SYNEXTEND_VIA_R
-l_uint* C_LPOOM_cluster(char** all_edgefiles,
+l_uint* C_LPOOM_cluster(const char** all_edgefiles,
                     const int num_edgefiles, // files
                     const char* dir,
                     const int num_ofiles,
