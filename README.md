@@ -9,5 +9,5 @@ This code is released as both a C distribution and an R distribution. This repos
 A publication associated with this code is currently in review. The following links are relevant:
 
 - Source data (accuracy benchmarks): https://doi.org/10.5281/zenodo.20419478
-- Source data (source data for runtime benchmarks): https://doi.org/10.5281/zenodo.20652308
+- Source data (runtime benchmarks): https://doi.org/10.5281/zenodo.20652308
 - Scripts: https://github.com/WrightLabScience/ExoLabel-Scripts
