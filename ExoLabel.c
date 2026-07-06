@@ -1158,7 +1158,19 @@ static l_uint csr_compress_edgelist_trie(const char* edgefile, prefix *trie,
         weight_buf[stringctr++] = c;
         c = get_buffchar(read_cache, rc_size, &rcache_i, &remaining, edgelist);
       }
-      weight = atof(weight_buf);
+      if(stringctr == 0){
+        static int warned_missing_weight = 0;
+        if(!warned_missing_weight){
+          warned_missing_weight = 1;
+          if(v >= VERBOSE_BASIC){
+            Rprintf("Warning: Missing weight column detected. Treating edge weights as 1.0.\n"
+                    "         To avoid this warning, specify --unweighted (-u) for unweighted graphs.\n");
+          }
+        }
+        weight = 1.0;
+      } else {
+        weight = atof(weight_buf);
+      }
     } else {
       weight = 1.0;
       while(c != linesep && (remaining || !safe_feof(edgelist)))
